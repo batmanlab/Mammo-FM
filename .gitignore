@@ -1,0 +1,7 @@
+weights/
+data/
+outputs/
+checkpoints/
+*.tar
+*.pth
+*.pt
