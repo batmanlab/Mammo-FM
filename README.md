@@ -11,11 +11,9 @@
 [🇹🇷 ![LUMINA PNG](https://img.shields.io/badge/LUMINA%20Mammography%20PNG-lightblue)](https://www.kaggle.com/datasets/shantanughosh/lumina-mammography-png)
 ![Visitor Badge](https://visitor-badge.laobi.icu/badge?page_id=batmanlab.FM&right_color=%23FFA500)
 
-#### ⚠️ WARNING: We are updating this codebase, so if anyone finds any error, please contact us. We will try to resolve it ASAP.
-
 #### ⚠️ WARNING: Before running the commands in this README, replace `/restricted/projectnb/batmanlab/shawn24/PhD` with the path to your own project/data root. This is a lab-specific example path and will not exist on other systems.
 
-#### ⚠️ WARNING: There is a plethora of pre-processing settings available for RSNA and VinDr Mammo datasets. We recommend using the pre-processing discussed in the following sections. We are not responsible for any discrepancies in the results due to different pre-processing settings. If you use the VinDr png dataset uploaded in kaggle, it is fully pre-processed. Else you can use the pre-processing scripts provided in the following sections.
+#### ⚠️ WARNING: There is a plethora of pre-processing settings available for RSNA and VinDr Mammo datasets. We recommend using the pre-processing discussed in the following sections. We are not responsible for any discrepancies in the results due to different pre-processing settings. If you use the png dataset uploaded in kaggle or HF by us, it is fully pre-processed. Else you can use the pre-processing scripts provided in the following sections.
 
 #### ⚠️ WARNING: If you find the `punkt_tab` error, run the following command in the python environment:
 
