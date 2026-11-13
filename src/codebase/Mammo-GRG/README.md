@@ -210,10 +210,7 @@ the image encoder; full fine-tuning updates it. The released grounding files are
 from the pooled-data full-finetuning runs. They are image-level classifiers and do not provide pixel-level or bounding-box localization.
 
 For new pooled-data grounding experiments, use the [data preparation script](../../scripts/prepare_grounding_data.py)
-and [full-finetuning launcher](../../scripts/submit_grounding_ft.sh). These train three independent binary classifiers
-for mass, calcification, and asymmetry using **VinDr, EMBED, BU, and UPMC only; CMMD is excluded from all three tasks**.
-Initialize with `Mammo-FM_BatmanlabTrained_CLIP.tar`. Each image is resized to **1520 pixels high × 912 pixels wide**.
-
+and [full-finetuning launcher](../../scripts/submit_grounding_ft.sh). 
 Create a private source-path configuration outside the repository:
 
 ```json
@@ -222,8 +219,7 @@ Create a private source-path configuration outside the repository:
   "embed": {"csv": "/data/embed/Embed_classification_diagnostic_data_wo_dup_folds.csv"},
   "reports": {
     "train_csv": "/data/reports/train_report_gen_stage1_image_level_with_density.csv",
-    "test_csv": "/data/reports/val_report_gen_stage1_image_level_with_density.csv",
-    "bu_image_root": "/data/bu/mammoclip"
+    "test_csv": "/data/reports/val_report_gen_stage1_image_level_with_density.csv"
   }
 }
 ```
@@ -363,5 +359,3 @@ python evaluation/mammo_green.py \
   --hypothesis-col generated_report \
   --model /path/to/local-instruction-model
 ```
-
-Invalid structured generations are marked explicitly and excluded from the aggregate Mammo-GREEN score.
