@@ -88,6 +88,35 @@ def all_classification_metrics(gt, pred, target_fpr=0.15):
     return metrics
 
 
+def compute_opt_thres(y_true, y_pred, target_fpr=0.15):
+    """Pick the operating threshold whose false-positive rate is closest to target_fpr.
+
+    Args:
+        y_true: array-like of binary ground-truth labels (0/1).
+        y_pred: array-like of predicted probabilities/scores for the positive class.
+        target_fpr: desired false-positive rate of the operating point.
+
+    Returns:
+        float threshold, to be applied as `y_pred >= threshold`. Falls back to 0.5
+        when a ROC curve cannot be computed (e.g., y_true contains a single class).
+    """
+    y_true = np.asarray(y_true)
+    y_pred = np.asarray(y_pred)
+    if np.unique(y_true).size < 2:
+        print("[compute_opt_thres] y_true contains a single class; falling back to threshold=0.5")
+        return 0.5
+    fpr, _, thresholds = roc_curve(y_true, y_pred)
+    # roc_curve prepends an infinite threshold; keep finite ones only
+    finite = np.isfinite(thresholds)
+    fpr, thresholds = fpr[finite], thresholds[finite]
+    if thresholds.size == 0:
+        return 0.5
+    dist = np.abs(fpr - target_fpr)
+    # among ROC points equally close to target_fpr, take the last (highest TPR)
+    idx = np.where(dist == dist.min())[0][-1]
+    return float(thresholds[idx])
+
+
 def auroc(gt, pred):
     return roc_auc_score(gt, pred)
 
