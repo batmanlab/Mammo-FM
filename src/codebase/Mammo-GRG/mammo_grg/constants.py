@@ -1,0 +1,26 @@
+"""Tokens and tensor conventions used by the four-view report generator."""
+
+IGNORE_INDEX = -100
+IMAGE_TOKEN_INDEX = -200
+
+DEFAULT_IMAGE_TOKEN = "<image>"
+DEFAULT_IMAGE_PATCH_TOKEN = "<im_patch>"
+DEFAULT_IM_START_TOKEN = "<im_start>"
+DEFAULT_IM_END_TOKEN = "<im_end>"
+
+TOKEN_LMLO = "<LMLO>"
+TOKEN_LCC = "<LCC>"
+TOKEN_RMLO = "<RMLO>"
+TOKEN_RCC = "<RCC>"
+VIEW_TOKENS = (TOKEN_LMLO, TOKEN_LCC, TOKEN_RMLO, TOKEN_RCC)
+
+TOKEN_FOR_MULTIPLE_CHOICE = "<multiple_choice>"
+TOKEN_FOR_LONG_ANSWER = "<long_answer>"
+TOKEN_FOR_REPORT_GENERATION = "<report_generation>"
+DIRECTIVE_TOKENS = (
+    TOKEN_FOR_MULTIPLE_CHOICE,
+    TOKEN_FOR_LONG_ANSWER,
+    TOKEN_FOR_REPORT_GENERATION,
+)
+
+EXPECTED_EMBEDDING_SHAPE = (1, 2048, 48, 29)

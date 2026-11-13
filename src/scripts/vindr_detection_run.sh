@@ -1,18 +1,22 @@
 #!/bin/bash
 
-### USER INPUT SECTION — set your checkpoint here:
+set -euo pipefail
 
-CKPT_KEY="Mammo-FM"
-CLIP_CKPT="/restricted/projectnb/batmanlab/shawn24/PhD/Breast-CLIP/src/codebase/outputs/Mammo-FM/b5_detector_n_modernbert_2048/checkpoints/fold_0/Mammo-FM_BatmanlabTrained_CLIP.tar"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+MAMMO_FM_REPO_ROOT="${MAMMO_FM_REPO_ROOT:-$(cd -- "${SCRIPT_DIR}/../.." && pwd)}"
+MAMMO_FM_CLIP_CKPT="${MAMMO_FM_CLIP_CKPT:-/restricted/projectnb/batmanlab/shawn24/PhD/Mammo-FM-Test-check/Mammo-FM_BatmanlabTrained_CLIP.tar}"
+: "${MAMMO_FM_EVAL_DIR:?Set MAMMO_FM_EVAL_DIR to an output directory outside the repository.}"
+MAMMO_FM_CONDA_ENV="${MAMMO_FM_CONDA_ENV:-/restricted/projectnb/batmanlab/shawn24/Mammo-CLIP_modernBert}"
+export MAMMO_FM_REPO_ROOT MAMMO_FM_EVAL_DIR MAMMO_FM_CONDA_ENV
+[[ -f "${MAMMO_FM_CLIP_CKPT}" ]] || { echo "Missing Mammo-FM checkpoint: ${MAMMO_FM_CLIP_CKPT}" >&2; exit 1; }
 
-#CKPT_KEY="mayo"
-#CLIP_CKPT="/restricted/projectnb/batmanlab/shawn24/PhD/Breast-CLIP/src/codebase/outputs/mayo/MammoCLIP-MayoClinic-epoch4.tar"
-
+CKPT_KEY="${MAMMO_FM_CKPT_KEY:-Mammo-FM}"
+CLIP_CKPT="${MAMMO_FM_CLIP_CKPT}"
 
 ### Define global log base path
-LOG_BASE="/restricted/projectnb/batmanlab/shawn24/PhD/Breast-CLIP-downstream/src/scc_logs/breast"
+LOG_BASE="${MAMMO_FM_EVAL_DIR}/logs"
 SUB_DIR="epoch4/batmanlab_trained_weightedBCE_n"
-source "/restricted/projectnb/batmanlab/shawn24/PhD/Breast-CLIP-downstream/src/scripts/configs/vindr_configs.sh"
+source "${SCRIPT_DIR}/configs/vindr_configs.sh"
 
 VINDR_LABELS=("Mass" "Suspicious Calcification")
 VINDR_DATA_FRACS=("1.0" "0.5" "0.25")
@@ -63,10 +67,9 @@ for LABEL in "${VINDR_LABELS[@]}"; do
         echo "Submitting VinDr DETECTION: $jobname"
         qsub -j y -N "$jobname" \
              -o "${logdir}/${jobname}.qlog" \
-             -v ARCH,CLIP_CKPT,DATASET_NAME,DATA_DIR,IMG_DIR,CSV_FILE,DATA_FRAC,FREEZE_BACKBONE,LABEL \
-             qsub_templates/base_detector.qsub
+             -v ARCH,CLIP_CKPT,DATASET_NAME,DATA_DIR,IMG_DIR,CSV_FILE,DATA_FRAC,FREEZE_BACKBONE,LABEL,MAMMO_FM_REPO_ROOT,MAMMO_FM_EVAL_DIR,MAMMO_FM_CONDA_ENV \
+             "${SCRIPT_DIR}/qsub_templates/base_detector.qsub"
       done
     done
   done
 done
-

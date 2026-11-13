@@ -805,7 +805,7 @@
       "there is a new mass in the subareolar left breast at posterior depth"
     ],
     "neg_right": [
-      "no mammographic evidence of malignancy",
+      "no mammographic evidence of cancer",
       "there is no suspicious mass seen",
       "there is no suspicious mass present",
       "there is no suspicious mass identified",
@@ -1057,7 +1057,7 @@
       "there is a benign mass with associated biopsy marker in the subareolar right breast at posterior depth"
     ],
     "neg_left": [
-      "no mammographic evidence of malignancy",
+      "no mammographic evidence of cancer",
       "there is no suspicious mass seen",
       "there is no suspicious mass present",
       "there is no suspicious mass identified",
@@ -4195,7 +4195,7 @@
       "there are indeterminant linear calcification in the subareolar left breast at posterior depth"
     ],
     "neg_right": [
-      "no mammographic evidence of malignancy",
+      "no mammographic evidence of cancer",
       "there are no suspicious calcification seen",
       "there are no suspicious calcification present",
       "there are no suspicious calcification identified",
@@ -5242,7 +5242,7 @@
       "there are stable calcification with associated biopsy marker in the subareolar right breast at posterior depth"
     ],
     "neg_left": [
-      "no mammographic evidence of malignancy",
+      "no mammographic evidence of cancer",
       "there are no suspicious calcification seen",
       "there are no suspicious calcification present",
       "there are no suspicious calcification identified",
@@ -7099,14 +7099,14 @@
       "there is no architectural distortion identified",
       "there is no architectural distortion present",
       "there are no suspicious masses, suspicious calcifications or architectural distortion",
-      "no mammographic evidence of malignancy"
+      "no mammographic evidence of cancer"
     ],
     "neg_left": [
       "there is no architectural distortion seen",
       "there is no architectural distortion identified",
       "there is no architectural distortion present",
       "there are no suspicious masses, suspicious calcifications or architectural distortion",
-      "no mammographic evidence of malignancy"
+      "no mammographic evidence of cancer"
     ]
   },
   "Global Asymmetry": {
@@ -7437,12 +7437,12 @@
     "neg_right": [
       "there are no suspicious masses, suspicious calcifications or architectural distortion",
       "there are no suspicious findings",
-      "no mammographic evidence of malignancy"
+      "no mammographic evidence of cancer"
     ],
     "neg_left": [
       "there are no suspicious masses, suspicious calcifications or architectural distortion",
       "there are no suspicious findings",
-      "no mammographic evidence of malignancy"
+      "no mammographic evidence of cancer"
     ]
   },
   "Focal Asymmetry": {
@@ -7933,12 +7933,12 @@
     "neg_right": [
       "there are no suspicious masses, suspicious calcifications or architectural distortion",
       "there are no suspicious findings",
-      "no mammographic evidence of malignancy"
+      "no mammographic evidence of cancer"
     ],
     "neg_left": [
       "there are no suspicious masses, suspicious calcifications or architectural distortion",
       "there are no suspicious findings",
-      "no mammographic evidence of malignancy"
+      "no mammographic evidence of cancer"
     ]
   },
   "Asymmetry": {
@@ -8509,12 +8509,12 @@
     "neg_right": [
       "there are no suspicious masses, suspicious calcifications or architectural distortion",
       "there are no suspicious findings",
-      "no mammographic evidence of malignancy"
+      "no mammographic evidence of cancer"
     ],
     "neg_left": [
       "there are no suspicious masses, suspicious calcifications or architectural distortion",
       "there are no suspicious findings",
-      "no mammographic evidence of malignancy"
+      "no mammographic evidence of cancer"
     ]
   },
   "Suspicious Lymph Node": {
@@ -8567,12 +8567,12 @@
     "neg_right": [
       "there are no suspicious masses, suspicious calcifications or architectural distortion",
       "there are no suspicious findings",
-      "no mammographic evidence of malignancy"
+      "no mammographic evidence of cancer"
     ],
     "neg_left": [
       "there are no suspicious masses, suspicious calcifications or architectural distortion",
       "there are no suspicious findings",
-      "no mammographic evidence of malignancy"
+      "no mammographic evidence of cancer"
     ]
   },
   "Nipple Retraction": {
@@ -8593,12 +8593,12 @@
     "neg_right": [
       "there are no suspicious masses, suspicious calcifications or architectural distortion",
       "there are no suspicious findings",
-      "no mammographic evidence of malignancy"
+      "no mammographic evidence of cancer"
     ],
     "neg_left": [
       "there are no suspicious masses, suspicious calcifications or architectural distortion",
       "there are no suspicious findings",
-      "no mammographic evidence of malignancy"
+      "no mammographic evidence of cancer"
     ]
   },
   "Skin Retraction": {
@@ -8675,12 +8675,12 @@
     "neg_right": [
       "there are no suspicious masses, suspicious calcifications or architectural distortion",
       "there are no suspicious findings",
-      "no mammographic evidence of malignancy"
+      "no mammographic evidence of cancer"
     ],
     "neg_left": [
       "there are no suspicious masses, suspicious calcifications or architectural distortion",
       "there are no suspicious findings",
-      "no mammographic evidence of malignancy"
+      "no mammographic evidence of cancer"
     ]
   },
   "Skin Thickening": {
@@ -8823,20 +8823,20 @@
     "neg_right": [
       "there are no suspicious masses, suspicious calcifications or architectural distortion",
       "there are no suspicious findings",
-      "no mammographic evidence of malignancy"
+      "no mammographic evidence of cancer"
     ],
     "neg_left": [
       "there are no suspicious masses, suspicious calcifications or architectural distortion",
       "there are no suspicious findings",
-      "no mammographic evidence of malignancy"
+      "no mammographic evidence of cancer"
     ]
   },
   "No Finding": {
     "pos_right": [
-      "no mammographic evidence of malignancy",
+      "no mammographic evidence of cancer",
       "there are no suspicious masses, suspicious calcifications or architectural distortion",
       "there are no suspicious findings",
-      "no mammographic evidence of malignancy"
+      "no mammographic evidence of cancer"
     ],
     "pos_left": [],
     "neg_right": [],

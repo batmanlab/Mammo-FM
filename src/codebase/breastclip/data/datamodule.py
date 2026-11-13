@@ -54,10 +54,38 @@ class DataModule:
         self.test_loader = None
 
         for dataset in data_config:
-            df = pd.read_csv(Path(
-                data_config[dataset]["data_dir"]) / data_config[dataset]["data_path"], dtype=dtype_options)
+            dataset_config = data_config[dataset]
+            data_path = Path(dataset_config["data_path"])
+            if not data_path.is_absolute():
+                data_path = Path(dataset_config["data_dir"]) / data_path
+            df = pd.read_csv(data_path, dtype=dtype_options)
             df = df.fillna(0)
-            if data_config[dataset]["name"].lower() == "vindr":
+            evaluation_scope = dataset_config.get("evaluation_scope")
+            if evaluation_scope == "all":
+                train_df = df.iloc[0:0].copy()
+                valid_df = df.reset_index(drop=True)
+            elif evaluation_scope == "test":
+                split_column = dataset_config.get("split_column", "split")
+                test_value = str(dataset_config.get("test_value", "test")).lower()
+                if split_column not in df.columns:
+                    raise ValueError(
+                        f"Dataset {dataset!r} has no evaluation split column {split_column!r}."
+                    )
+                test_mask = df[split_column].astype(str).str.lower() == test_value
+                train_df = df[~test_mask].reset_index(drop=True)
+                valid_df = df[test_mask].reset_index(drop=True)
+            elif evaluation_scope is not None:
+                raise ValueError(
+                    f"Unsupported evaluation_scope {evaluation_scope!r} for dataset {dataset!r}."
+                )
+            elif "train_folds" in dataset_config or "valid_folds" in dataset_config:
+                if "train_folds" not in dataset_config or "valid_folds" not in dataset_config:
+                    raise ValueError(
+                        f"Dataset {dataset!r} must define both train_folds and valid_folds."
+                    )
+                train_df = df[df["fold"].isin(dataset_config["train_folds"])].reset_index(drop=True)
+                valid_df = df[df["fold"].isin(dataset_config["valid_folds"])].reset_index(drop=True)
+            elif dataset_config["name"].lower() == "vindr":
                 train_df = df[df['split'] == "training"].reset_index(drop=True)
                 valid_df = df[df['split'] == "test"].reset_index(drop=True)
             else:
@@ -78,6 +106,8 @@ class DataModule:
                 mean=mean,
                 std=std,
                 image_encoder_type=self.image_encoder_type,
+                path_layout=dataset_config.get("path_layout"),
+                label_layout=dataset_config.get("label_layout"),
                 label_col=data_config[dataset]["label_col"] if "label_col" in data_config[dataset] else None,
                 label_text=data_config[dataset]["label_text"] if "label_text" in data_config[dataset] else None,
             )
@@ -95,6 +125,8 @@ class DataModule:
                 mean=mean,
                 std=std,
                 image_encoder_type=self.image_encoder_type,
+                path_layout=dataset_config.get("path_layout"),
+                label_layout=dataset_config.get("label_layout"),
                 label_col=data_config[dataset]["label_col"] if "label_col" in data_config[dataset] else None,
                 label_text=data_config[dataset]["label_text"] if "label_text" in data_config[dataset] else None,
             )

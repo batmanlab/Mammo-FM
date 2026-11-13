@@ -1,0 +1,7 @@
+Mammo-GRG inference adaptation, distributed under Apache-2.0.
+LLaVA-derived model and tokenization: Copyright 2023 Haotian Liu.
+Original LLaVA: https://github.com/haotian-liu/LLaVA
+Mammo-FM four-view adaptation: https://github.com/batmanlab/Mammo-FM
+The attentional projector follows the released Mammo-GRG implementation.
+Package modifications restrict checkpoint loading, remove training helpers and
+global model registration, and forward cache positions for Transformers 4.57.

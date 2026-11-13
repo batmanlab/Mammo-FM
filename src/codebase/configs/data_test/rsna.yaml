@@ -8,7 +8,5 @@ rsna:
   label_col: "cancer"
   label_text:
     cancer:
-#      - "No evidence of malignancy is identified"
-#      - "Evidence of malignancy is identified"
       - "No Cancer"
       - "Cancer"

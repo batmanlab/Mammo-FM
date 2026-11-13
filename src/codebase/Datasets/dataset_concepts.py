@@ -11,8 +11,32 @@ from imgaug.augmentables.bbs import BoundingBox, BoundingBoxesOnImage
 from torch.utils.data import Dataset
 
 
+CLASSIFICATION_IMAGE_HEIGHT = 1520
+CLASSIFICATION_IMAGE_WIDTH = 912
+
+
+def validate_classification_image_size(args):
+    """Classifier image sizes are always specified as height, then width."""
+    image_size = tuple(int(value) for value in getattr(
+        args, "img_size", (CLASSIFICATION_IMAGE_HEIGHT, CLASSIFICATION_IMAGE_WIDTH)
+    ))
+    if image_size != (CLASSIFICATION_IMAGE_HEIGHT, CLASSIFICATION_IMAGE_WIDTH):
+        raise ValueError("Mammo-FM classification requires img_size=[1520, 912] (height, width).")
+
+
+def resize_classification_image(image):
+    """Apply the same portrait geometry before every classifier forward pass."""
+    if image.shape[:2] != (CLASSIFICATION_IMAGE_HEIGHT, CLASSIFICATION_IMAGE_WIDTH):
+        image = cv2.resize(
+            image, (CLASSIFICATION_IMAGE_WIDTH, CLASSIFICATION_IMAGE_HEIGHT),
+            interpolation=cv2.INTER_LINEAR,
+        )
+    return image
+
+
 class MammoDataset(Dataset):
     def __init__(self, args, df, transform=None):
+        validate_classification_image_size(args)
         self.args = args
         self.df = df
         self.dir_path = args.data_dir / args.img_dir
@@ -28,12 +52,14 @@ class MammoDataset(Dataset):
     def __getitem__(self, idx):
         data = self.df.iloc[idx]
         
-        if self.dataset.lower() == "rsna":
+        if self.dataset.lower() == "grounding":
+            img_path = str(data["image_path"])
+        elif self.dataset.lower() == "rsna":
             img_path = self.dir_path / str(self.df.iloc[idx]['patient_id']) / str(self.df.iloc[idx]['image_id'])
             img_path = f'{img_path}.png'
         elif self.dataset.lower() == "vindr":
             img_path = self.dir_path / str(self.df.iloc[idx]['patient_id']) / str(self.df.iloc[idx]['image_id'])
-        elif self.dataset.lower() == "embed":
+        elif self.dataset.lower() == "image_label":
             img_path = self.dir_path / str(self.df.iloc[idx]['anon_dicom_path'])
             img_path = str(img_path).replace('.dcm', '.png')
 
@@ -46,12 +72,19 @@ class MammoDataset(Dataset):
             img_path = img_path.replace("/NLBS_Data/", "/NLBS_Data_png_v1/")
             img_path = str(img_path).replace('.dcm', '.png')
 
-        img = Image.open(img_path).convert('RGB')
+        elif self.dataset.lower() == "lumina":
+            source_path = Path(str(self.df.iloc[idx]['image_full_path']))
+            marker_index = source_path.parts.index("LUMINA_RAW")
+            relative_parts = list(source_path.parts[marker_index + 1:])
+            if relative_parts[0] == "Malign":
+                relative_parts[0] = "Malignant"
+            img_path = self.dir_path / Path(*relative_parts).with_suffix(".png")
+
+        img = resize_classification_image(np.asarray(Image.open(img_path).convert('RGB')))
 
         if self.transform:
-            img = np.array(img)
             augmented = self.transform(image=img)
-            img = augmented['image']
+            img = resize_classification_image(augmented['image'])
 
             img = img.astype('float32')
             img -= img.min()
@@ -109,10 +142,10 @@ class MammoDataset_concept_detection(Dataset):
         self.std = args.std
         if self.args.dataset.lower() == 'vindr':
             self.image_dict = self._generate_image_dict_vindr()
-        elif self.args.dataset.lower() == 'embed':
-            self.image_dict = self._generate_image_dict_embed()
+        elif self.args.dataset.lower() == 'image_label':
+            self.image_dict = self._generate_image_dict_image_label()
 
-    def _generate_image_dict_embed(self):
+    def _generate_image_dict_image_label(self):
         image_dict = defaultdict(lambda: {"boxes": [], "labels": []})
 
         for idx, row in self.annotations.iterrows():
@@ -165,7 +198,7 @@ class MammoDataset_concept_detection(Dataset):
             path = f"{self.dir_path}/{study_id}/{image_id}.png"
         elif self.dataset.lower() == 'vindr' and image_id.endswith(".png"):
             path = f"{self.dir_path}/{study_id}/{image_id}"
-        elif self.dataset.lower() == 'embed':
+        elif self.dataset.lower() == 'image_label':
             path = image_id.replace('images', 'images_png_psc').replace('.dcm', '.png')
 
         image = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
@@ -229,6 +262,7 @@ def collater_for_concept_detection(data):
 
 class MammoDataset_concept(Dataset):
     def __init__(self, args, df, dataset, transform=None, windowing=False):
+        validate_classification_image_size(args)
         self.df = df
         self.dir_path = args.data_dir / args.img_dir
         self.dataset = dataset
@@ -253,10 +287,10 @@ class MammoDataset_concept(Dataset):
             img_path = self.dir_path / f'{study_id}' / self.df.iloc[idx]['image_id']
             img_path = f'{img_path}.png'
 
-        img = cv2.imread(str(img_path), cv2.IMREAD_GRAYSCALE)
+        img = resize_classification_image(cv2.imread(str(img_path), cv2.IMREAD_GRAYSCALE))
         if self.transform:
             augmented = self.transform(image=img)
-            img = augmented['image']
+            img = resize_classification_image(augmented['image'])
         img = img.astype('float32')
         img -= img.min()
         img /= img.max()
@@ -362,16 +396,12 @@ class MammoDatasetRiskPredictor(Dataset):
         for image_path in image_paths:
             if self.dataset.lower() == "rsna":
                 img_path = self.dir_path / str(data['patient_id']) / image_path
-            elif self.dataset.lower() == "bu":
+            elif self.dataset.lower() == "image_text":
                 image_name = image_path.split("/")[-1]
                 if "controls" in image_path:
-                    img_path = Path(
-                        f"/restricted/projectnb/batmanlab/shared/Data/RSNA_Breast_Imaging/Dataset/External/BU_Mammo/mammoclip/controls/test_images_png/{data['exam_id']}/{image_name}"
-                    )
+                    img_path = self.dir_path / "controls" / "test_images_png" / str(data["exam_id"]) / image_name
                 elif "cases" in image_path:
-                    img_path = Path(
-                        f"/restricted/projectnb/batmanlab/shared/Data/RSNA_Breast_Imaging/Dataset/External/BU_Mammo/mammoclip/cases/test_images_png/{data['exam_id']}/{image_name}"
-                    )
+                    img_path = self.dir_path / "cases" / "test_images_png" / str(data["exam_id"]) / image_name
             img = Image.open(img_path).convert('RGB')
             if self.transform:
                 img = np.array(img)
@@ -396,7 +426,7 @@ class MammoDatasetRiskPredictor(Dataset):
         side_seq = torch.tensor([0, 0, 1, 1], dtype=torch.long)
 
         patient_id = data["patient_id"]
-        exam_id = data["exam_id"] if self.dataset.lower() == "bu" else torch.tensor(0)
+        exam_id = data["exam_id"] if self.dataset.lower() == "image_text" else torch.tensor(0)
 
         # MIRAI logits and risks
         # to Vedant, if u have ground truth, u need the risks only, no logits
@@ -411,7 +441,7 @@ class MammoDatasetRiskPredictor(Dataset):
         year4_risk = torch.tensor(data["4_year_risk"])
         year5_risk = torch.tensor(data["5_year_risk"])
 
-        if self.dataset.lower() == "bu":
+        if self.dataset.lower() == "image_text":
             breast_density = data["breast_density"]
             age = torch.tensor(data["Patient Age"])
             cancer1yr = torch.tensor(data["cancer1yr_updated"], dtype=torch.long)
@@ -419,7 +449,7 @@ class MammoDatasetRiskPredictor(Dataset):
             cancer3yr = torch.tensor(data["cancer3yr_updated"], dtype=torch.long)
             cancer4yr = torch.tensor(data["cancer4yr_updated"], dtype=torch.long)
             cancer5yr = torch.tensor(data["cancer5yr_updated"], dtype=torch.long)
-            if self.args.cal_contribution_interpretability=="n":
+            if self.args.cal_contribution_interpretability == "n":
                 return {
                     "patient_id": patient_id,
                     "exam_id": exam_id,

@@ -1,0 +1,10 @@
+{
+  "n_inputs": 2048,
+  "n_latents": 16384,
+  "activation": "TopKReLU",
+  "tied": false,
+  "normalize": false,
+  "latent_soft_cap": 0.0,
+  "nesting_list": [64, 128, 256],
+  "relative_importance": [1.0, 1.0, 1.0]
+}

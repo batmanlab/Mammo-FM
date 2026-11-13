@@ -1,47 +1,36 @@
 defaults:
   - _self_
   - data_test:
+      - lumina_zs
+      - nlbreast_zs
+      - cmmd_zs
+      - vindr_zs_abnormal
       - vindr_zs
       - rsna_zs
-
   - dataloader: dataloader_4
   - transform: clahe
-  - tokenizer: clinical_bert
+  - tokenizer: modernbert
 
 model:
-  clip_check_point: ????
+  clip_check_point: ${oc.env:MAMMO_FM_CLIP_CKPT,/restricted/projectnb/batmanlab/shawn24/PhD/Mammo-FM-Test-check/Mammo-FM_BatmanlabTrained_CLIP.tar}
 
 base:
-  data_dir: "/restricted/projectnb/batmanlab/shared/Data"
-  period: "n"
   fold: 0
   seed: 10
-  amp: True
+  amp: true
   mean: 0.3089279
   std: 0.25053555408335154
   image_size_h: 1520
   image_size_w: 912
-  text_max_length: 256
-  loss_best: classification
-  data_frac: 1.0
+  text_max_length: 2048
+  modern_bert_cache: ${oc.env:MAMMO_FM_MODERNBERT_DIR,/restricted/projectnb/batmanlab/shawn24/PhD/Mammo-FM-Test-check/text_encoders/modernbert_mlm_5epochs}
+  prompts_json: ${hydra:runtime.cwd}/src/zs_prompts/zs_prompts.json
   output:
-    save_path: ${hydra:run.dir}/zero_shot_results/
-  zs_prompts:
-    vindr:
-      mass:
-        - "no mass"
-        - "mass"
-      suspicious_calcification:
-        - "no suspicious calcification"
-        - "suspicious calcification"
-    rsna:
-      malignancy:
-          - "no malignancy"
-          - "malignancy"
+    save_path: ${hydra:run.dir}
 
 hydra:
   run:
-    dir: ????
+    dir: ${oc.env:MAMMO_FM_ZERO_SHOT_DIR,/restricted/projectnb/batmanlab/shawn24/PhD/Mammo-FM-Test-check/zero_shot/b5}
   job_logging:
     version: 1
     formatters:
@@ -58,5 +47,5 @@ hydra:
         formatter: simple
     root:
       level: INFO
-      handlers: [ file, console ]
+      handlers: [file, console]
     disable_existing_loggers: false

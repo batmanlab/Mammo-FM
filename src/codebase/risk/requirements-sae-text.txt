@@ -1,0 +1,3 @@
+# Optional text environment overlay, installed AFTER requirements.txt in a separate environment.
+# This replaces the risk environment's older Transformers version.
+transformers==4.48.0

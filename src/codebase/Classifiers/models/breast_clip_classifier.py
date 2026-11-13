@@ -27,6 +27,13 @@ class BreastClipClassifier(nn.Module):
         self.raw_features = None
         self.pool_features = None
 
+    def train(self, mode=True):
+        super().train(mode)
+        if self.arch.endswith("_lp"):
+            # Linear probing must freeze BatchNorm buffers/drop-connect as well as weights.
+            self.image_encoder.eval()
+        return self
+
     def get_image_encoder_type(self):
         return self.image_encoder_type
 

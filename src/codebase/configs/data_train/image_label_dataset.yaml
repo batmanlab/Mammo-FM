@@ -1,0 +1,12 @@
+image_label_dataset:
+  name: "image_label_dataset"
+  data_type: "imagetext"
+  data_dir: "."
+  img_dir: ""
+  data_path: ${oc.env:MAMMO_FM_IMAGE_LABEL_CSV}
+  path_layout: "direct"
+  label_layout: "per_image"
+  train_folds: [1, 2]
+  valid_folds: [0]
+  text_max_length: ${base.text_max_length}
+  data_frac: 1.0

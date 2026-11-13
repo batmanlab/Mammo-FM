@@ -1,0 +1,8 @@
+lumina:
+  name: "lumina"
+  data_type: "image_classification_zs"
+  data_dir: ${oc.env:MAMMO_FM_LUMINA_DATA_DIR,/restricted/projectnb/batmanlab/shared/Data/LUMINA}
+  img_dir: "LUMINA_PNG_Mammo_FM"
+  data_path: "lumina_metadata.csv"
+  evaluation_scope: "all"
+  text_max_length: ${base.text_max_length}

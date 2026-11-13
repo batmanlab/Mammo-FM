@@ -1,0 +1,9 @@
+image_text_dataset_1:
+  name: "image_text_dataset_1"
+  data_type: "imagetext"
+  data_dir: "."
+  img_dir: ${oc.env:MAMMO_FM_IMAGE_TEXT_1_IMAGE_DIR}
+  data_path: ${oc.env:MAMMO_FM_IMAGE_TEXT_1_CSV}
+  path_layout: "patient_directory"
+  text_max_length: ${base.text_max_length}
+  data_frac: 1.0

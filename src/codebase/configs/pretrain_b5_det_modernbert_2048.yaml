@@ -1,0 +1,42 @@
+defaults:
+  - _self_
+  - data_train:
+      - image_text_dataset_1
+      - image_label_dataset
+      - image_text_dataset_2
+  - dataloader: dataloader_b5
+  - tokenizer: modernbert
+  - transform: clahe
+  - model: clip_b5_det_modernbert
+  - optimizer: adamw
+  - scheduler: cosine_epoch20_warmup1
+  - loss: breast_clip
+
+base:
+  period: "n"
+  resume_training: false
+  epoch_to_start: 0
+  checkpoint_to_start: ""
+  train_fast: false
+  fold: 0
+  seed: 10
+  amp: true
+  mean: 0.3089279
+  std: 0.25053555408335154
+  image_size_h: 1520
+  image_size_w: 912
+  text_max_length: 2048
+  loss_best: contrastive
+  data_frac: 1.0
+    zs_prompts:
+      rsna:
+      - "no cancer"
+      - "cancer"
+  output:
+    args_path: ${hydra:run.dir}
+    checkpoint: ${hydra:run.dir}/checkpoints/
+    tensorboard: ${hydra:run.dir}/tensorboard/
+
+hydra:
+  run:
+    dir: ${oc.env:MAMMO_FM_OUTPUT_DIR}

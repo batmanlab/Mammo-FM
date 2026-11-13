@@ -9,7 +9,8 @@ from imgaug import augmenters as iaa
 from torch.utils.data import DataLoader, WeightedRandomSampler
 
 from .dataset_concepts import MammoDataset_concept, MammoDataset_concept_detection, \
-    collater_for_concept_detection, MammoDataset, collator_mammo_dataset_w_concepts
+    collater_for_concept_detection, MammoDataset, collator_mammo_dataset_w_concepts, \
+    validate_classification_image_size
 
 
 class center_crop(object):
@@ -37,29 +38,24 @@ def get_transforms(args):
     if (
             args.dataset.lower() == "rsna" or
             args.dataset.lower() == "vindr" or
-            args.dataset.lower() == "embed" or
+            args.dataset.lower() == "image_label" or
             args.dataset.lower() == "cmmd" or
-            args.dataset.lower() == "nlbreast"
+            args.dataset.lower() == "nlbreast" or
+            args.dataset.lower() == "lumina" or
+            args.dataset.lower() == "grounding"
     ) and args.model_type.lower() == "classifier":
-        if args.img_size[0] == 1520 and args.img_size[1] == 912:
-            return Compose([
-                HorizontalFlip(),
-                VerticalFlip(),
-                Affine(rotate=20, translate_percent=0.1, scale=[0.8, 1.2], shear=20),
-                ElasticTransform(alpha=args.alpha, sigma=args.sigma)
-            ], p=args.p)
-        else:
-            return Compose([
-                Resize(width=int(args.img_size[0]), height=int(args.img_size[1])),
-                HorizontalFlip(),
-                VerticalFlip(),
-                Affine(rotate=20, translate_percent=0.1, scale=[0.8, 1.2], shear=20),
-                ElasticTransform(alpha=args.alpha, sigma=args.sigma)
-            ], p=args.p
-            )
+        validate_classification_image_size(args)
+        # MammoDataset applies the mandatory 1520-high x 912-wide resize before
+        # this optional augmentation, including when args.p is zero.
+        return Compose([
+            HorizontalFlip(),
+            VerticalFlip(),
+            Affine(rotate=20, translate_percent=0.1, scale=[0.8, 1.2], shear=20),
+            ElasticTransform(alpha=args.alpha, sigma=args.sigma)
+        ], p=args.p)
     elif (
             args.dataset.lower() == "vindr" or
-            args.dataset.lower() == "embed"
+            args.dataset.lower() == "image_label"
     ) and args.model_type.lower() == "concept-detector":
         transform = torchvision.transforms.Compose([
             torchvision.transforms.ToTensor(),
@@ -151,11 +147,6 @@ def get_dataloader(args):
     else:
         train_tfm = get_transforms(args)
 
-    if args.dataset.lower() == "cmmd":
-        train_tfm.transforms.insert(0, Resize(width=int(args.img_size[0]), height=int(args.img_size[1])))
-        val_tfm = Compose([Resize(height=912, width=1520)])
-
-
     train_dataset = MammoDataset(args=args, df=args.train_folds, transform=train_tfm)
     valid_dataset = MammoDataset(args=args, df=args.valid_folds, transform=val_tfm)
 
@@ -202,6 +193,6 @@ def get_dataset(args, is_train_mode=True, is_classifier=True, train=True):
         return get_dataloader_concept_classifier(args, train=train)
     elif (
             args.dataset.lower() == "vindr" or
-            args.dataset.lower() == "embed"
+            args.dataset.lower() == "image_label"
     ) and args.model_type.lower() == 'concept-detector':
         return get_dataloader_concept_detector(args, train=train)

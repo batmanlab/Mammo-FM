@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+outputs/
+artifacts/
+logs/
+*.pt
+*.pth
+*.pth-best.tar
+*.tar
+*.npy
+*.npz

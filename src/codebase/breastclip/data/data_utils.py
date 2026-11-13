@@ -17,19 +17,19 @@ def load_tokenizer(source, pretrained_model_name_or_path, cache_dir, **kwargs):
         if tokenizer.bos_token_id is None:
             tokenizer.bos_token_id = tokenizer.cls_token_id
     elif source == "ft":
+        if not os.path.isdir(cache_dir):
+            raise FileNotFoundError(f"ModernBERT checkpoint directory does not exist: {cache_dir}")
         tokenizer = AutoTokenizer.from_pretrained(
-            pretrained_model_name_or_path="answerdotai/ModernBERT-base",
+            pretrained_model_name_or_path=cache_dir,
             padding_side="right",
             trust_remote_code=True,
+            local_files_only=True,
             **kwargs,
         )
-        # Set special token IDs from the config
-        tokenizer.bos_token_id = 50281  # [CLS]
-        tokenizer.eos_token_id = 50282  # [SEP]
-        tokenizer.pad_token_id = 50283  # [PAD]
-        tokenizer.unk_token_id = 50280  # [UNK]
-        tokenizer.cls_token_id = 50281  # [CLS]
-        tokenizer.sep_token_id = 50282  # [SEP]
+        if tokenizer.bos_token_id is None:
+            tokenizer.bos_token = tokenizer.cls_token
+        if tokenizer.eos_token_id is None:
+            tokenizer.eos_token = tokenizer.sep_token
     else:
         raise KeyError(f"Not supported tokenizer source: {source}")
 

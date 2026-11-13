@@ -5,21 +5,18 @@
 #$ -l gpu_c=8.0
 #$ -pe omp 4
 
-#export CUDA_HOME=/share/pkg.8/cuda/11.8/install
-#export CUDA_PATH=/share/pkg.8/cuda/11.8/install
-#export PATH=$CUDA_HOME/bin:$PATH
-#export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
-#export CPATH=$CUDA_HOME/include:$CPATH
-#export TOKENIZERS_PARALLELISM=false
+set -euo pipefail
 
-export OLD_LD_PATH=$LD_LIBRARY_PATH
-export LD_LIBRARY_PATH=/restricted/projectnb/batmanlab/shawn24/Mammo-CLIP_modernBert/lib/python3.9/site-packages/nvidia/cuda_runtime/lib:$LD_LIBRARY_PATH
 export TOKENIZERS_PARALLELISM=false
 
 module load miniconda
-#module load python3/3.9
+conda activate "${MAMMO_FM_CONDA_ENV:-/restricted/projectnb/batmanlab/shawn24/Mammo-CLIP_modernBert}"
 
-conda activate /restricted/projectnb/batmanlab/shawn24/Mammo-CLIP_modernBert
+nvidia-smi
+python -c 'import os, sys, torch; from torchvision.ops import nms; expected = os.environ["MAMMO_FM_CONDA_ENV"]; assert sys.prefix == expected, (sys.prefix, expected); assert torch.cuda.is_available(), "CUDA is unavailable"; boxes = torch.tensor([[0., 0., 1., 1.]], device="cuda"); scores = torch.tensor([1.], device="cuda"); assert nms(boxes, scores, 0.5).numel() == 1; print(f"Detector CUDA preflight passed: {sys.executable}; {torch.cuda.get_device_name(0)}")'
+
+: "${MAMMO_FM_REPO_ROOT:?Set MAMMO_FM_REPO_ROOT to the Mammo-FM repository root.}"
+: "${MAMMO_FM_EVAL_DIR:?Set MAMMO_FM_EVAL_DIR to an output directory outside the repository.}"
 
 echo "Running: $ARCH with checkpoint $CLIP_CKPT"
 echo $ARCH
@@ -31,21 +28,24 @@ echo $DATA_FRAC
 echo $LABEL
 echo $FREEZE_BACKBONE
 
-python /restricted/projectnb/batmanlab/shawn24/PhD/Breast-CLIP-downstream/src/codebase/train_detector.py \
-  --data-dir $DATA_DIR \
-  --img-dir $IMG_DIR \
-  --csv-file $CSV_FILE \
-  --dataset $DATASET_NAME \
-  --arch $ARCH \
+python "${MAMMO_FM_REPO_ROOT}/src/codebase/train_detector.py" \
+  --tensorboard-path "${MAMMO_FM_EVAL_DIR}/tensorboard" \
+  --checkpoints "${MAMMO_FM_EVAL_DIR}/checkpoints" \
+  --output_path "${MAMMO_FM_EVAL_DIR}/outputs" \
+  --data-dir "$DATA_DIR" \
+  --img-dir "$IMG_DIR" \
+  --csv-file "$CSV_FILE" \
+  --dataset "$DATASET_NAME" \
+  --arch "$ARCH" \
   --epochs 120 \
   --batch-size 7 \
-  --freeze_backbone $FREEZE_BACKBONE \
-  --data_frac $DATA_FRAC \
+  --freeze_backbone "$FREEZE_BACKBONE" \
+  --data_frac "$DATA_FRAC" \
   --concepts="$LABEL" \
-  --clip_chk_pt $CLIP_CKPT \
+  --clip_chk_pt_path "$CLIP_CKPT" \
   --print-freq 5000 \
   --log-freq 300 \
-  --running-interactive 'n'\
+  --running-interactive 'n' \
   --focal-alpha 0.25 \
   --focal-gamma 2.0 \
   --score-threshold 0.2

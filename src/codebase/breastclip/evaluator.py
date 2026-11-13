@@ -1,12 +1,13 @@
+import copy
 import logging
+from pathlib import Path
 from typing import Dict, List, Union
 
 import numpy as np
+import pandas as pd
 import torch
 from scipy.special import softmax
 from sklearn import metrics
-from sklearn.metrics import auc, precision_recall_curve, accuracy_score
-from sklearn.metrics import roc_auc_score
 from tqdm import tqdm
 
 from .data import DataModule
@@ -16,333 +17,259 @@ log = logging.getLogger(__name__)
 
 
 class Evaluator:
+    """Evaluation helper for Mammo-FM zero-shot classification and retrieval."""
+
+    _LABEL_KEYS = (
+        "mass",
+        "calc",
+        "architectural_distortion",
+        "asymmetry",
+        "focal_asymmetry",
+        "global_asymmetry",
+        "nipple_retraction",
+        "skin_retraction",
+        "skin_thickening",
+        "suspicious_lymph_node",
+        "density",
+        "cancer",
+    )
+    _PROMPT_TO_LABEL = {
+        "suspicious calcification": "calc",
+        "architectural distortion": "architectural_distortion",
+        "focal asymmetry": "focal_asymmetry",
+        "global asymmetry": "global_asymmetry",
+        "nipple retraction": "nipple_retraction",
+        "skin retraction": "skin_retraction",
+        "skin thickening": "skin_thickening",
+        "suspicious lymph node": "suspicious_lymph_node",
+        "cancer": "cancer",
+    }
+
     def __init__(self, config: Dict, ckpt_path):
-        super(Evaluator).__init__()
-
         self.config = config
-        self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        # load ckpt config
-        ckpt = torch.load(ckpt_path, map_location="cpu")
-        self.ckpt_config = ckpt["config"]
-        self.clip_image_encoder = None
-        if self.ckpt_config["model"]["image_encoder"]["model_type"] == "swin":
-            self.clip_image_encoder = self.ckpt_config["model"]["image_encoder"]["model_type"]
-        elif (
-                self.ckpt_config["model"]["image_encoder"]["name"] == "resnet101" or
-                self.ckpt_config["model"]["image_encoder"]["name"] == "resnet152" or
-                self.ckpt_config["model"]["image_encoder"]["name"] == "tf_efficientnet_b5_ns-detect" or
-                self.ckpt_config["model"]["image_encoder"]["name"] == "tf_efficientnetv2-detect"
-        ):
-            self.clip_image_encoder = self.ckpt_config["model"]["image_encoder"]["name"]
-        # load dataset
+        checkpoint = torch.load(ckpt_path, map_location="cpu")
+        self.ckpt_config = copy.deepcopy(checkpoint["config"])
+
+        modern_bert_cache = self.config["base"].get("modern_bert_cache")
+        tokenizer_config = copy.deepcopy(self.ckpt_config.get("tokenizer"))
+        if modern_bert_cache:
+            tokenizer_config["cache_dir"] = modern_bert_cache
+            self.ckpt_config["model"]["text_encoder"]["cache_dir"] = modern_bert_cache
+
+        image_encoder = self.ckpt_config["model"]["image_encoder"]
+        self.clip_image_encoder = image_encoder.get("model_type")
+        if image_encoder.get("name") in {
+            "resnet101", "resnet152", "tf_efficientnet_b5_ns-detect", "tf_efficientnetv2-detect"
+        }:
+            self.clip_image_encoder = image_encoder["name"]
+
         self.datamodule = DataModule(
             data_config=self.config["data_test"],
             dataloader_config=self.config["dataloader"],
-            tokenizer_config=self.ckpt_config["tokenizer"] if "tokenizer" in self.ckpt_config else None,
-            transform_config=self.config["transform"] if "transform" in self.config else self.ckpt_config["transform"],
+            tokenizer_config=tokenizer_config,
+            transform_config=self.config.get("transform", self.ckpt_config.get("transform")),
             mean=self.config["base"]["mean"],
             std=self.config["base"]["std"],
             image_encoder_type=self.clip_image_encoder,
-            cur_fold=self.config["base"]["fold"]
+            cur_fold=self.config["base"]["fold"],
         )
-
         self.test_dataloader_dict = self.datamodule.valid_dataloader()
-        assert len(self.test_dataloader_dict) > 0
+        if not self.test_dataloader_dict:
+            raise ValueError("No zero-shot evaluation datasets were configured.")
 
-        # load model
         self.model = build_model(
             model_config=self.ckpt_config["model"],
             loss_config=self.ckpt_config["loss"],
-            tokenizer=self.datamodule.tokenizer
-        )
-        self.model = self.model.to(self.device)
-        print(self.model)
-        log.info(self.model)
-
-    def get_embeddings(self, checkpoint, test_dataset_name):
-        log.info(f"<<<<<==============================================================================>>>>>")
-        log.info(f"Load model {checkpoint}")
-        ckpt = torch.load(checkpoint, map_location="cpu")
-        self.model.load_state_dict(ckpt["model"], strict=False)
+            tokenizer=self.datamodule.tokenizer,
+        ).to(self.device)
+        incompatible = self.model.load_state_dict(checkpoint["model"], strict=False)
+        if incompatible.missing_keys or incompatible.unexpected_keys:
+            log.warning("Checkpoint load: missing=%s unexpected=%s",
+                        incompatible.missing_keys, incompatible.unexpected_keys)
         self.model.eval()
-        dataloader = self.test_dataloader_dict[test_dataset_name]
+        del checkpoint
 
-        idx = 0
+    def get_embeddings(self, test_dataset_name):
+        dataloader = self.test_dataloader_dict[test_dataset_name]
         image_embeddings = []
         text_embeddings = []
-        texts = []
-        label_names = []
-        labels = []
-        mass = []
-        calc = []
-        density = []
-        cancer = []
-        for batch in tqdm(dataloader):
-            if (
-                    self.clip_image_encoder == "swin" or
-                    self.clip_image_encoder == "resnet101" or
-                    self.clip_image_encoder == "resnet152" or
-                    self.clip_image_encoder == "tf_efficientnet_b5_ns-detect" or
-                    self.clip_image_encoder == "tf_efficientnetv2-detect"
-            ):
-                batch["images"] = batch["images"].squeeze(1).permute(0, 3, 1, 2)
+        collected = {key: [] for key in self._LABEL_KEYS}
+        collected.update({"texts": [], "label_names": [], "labels": [],
+                          "patient_id": [], "img_path": []})
 
-            idx += 1
-            img_emb = self.encode_image(batch["images"])
-            image_embeddings.append(img_emb)
+        for batch in tqdm(dataloader, desc=f"Embedding {test_dataset_name}"):
+            images = batch["images"]
+            if images.ndim == 5 and images.shape[1] == 1:
+                images = images.squeeze(1)
+            if images.ndim == 4 and images.shape[-1] in {1, 3}:
+                images = images.permute(0, 3, 1, 2)
+            image_embeddings.append(self.encode_image(images))
+
             if "texts" in batch:
-                texts += batch["texts"]
+                collected["texts"].extend(batch["texts"])
             if "text_tokens" in batch:
-                text_emb = self.encode_text(batch["text_tokens"])
-                text_embeddings.append(text_emb)
-            if "label_names" in batch:
-                label_names.extend(batch["label_names"])
+                text_embeddings.append(self.encode_text(batch["text_tokens"]))
+            for key in ("label_names", "patient_id", "img_path"):
+                if key in batch:
+                    collected[key].extend(batch[key])
             if "labels" in batch:
-                labels.extend(batch["labels"].numpy())
-            if "mass" in batch:
-                mass.extend(batch["mass"].numpy())
-            if "calc" in batch:
-                calc.extend(batch["calc"].numpy())
-            if "density" in batch:
-                density.extend(batch["density"].numpy())
-            if "cancer" in batch:
-                cancer.extend(batch["cancer"].numpy())
+                collected["labels"].extend(batch["labels"].cpu().numpy().tolist())
+            for key in self._LABEL_KEYS:
+                if key in batch:
+                    collected[key].extend(batch[key].cpu().numpy().tolist())
 
-        image_embeddings = np.concatenate(image_embeddings, axis=0)
-        if len(text_embeddings) > 0:
-            text_embeddings = np.concatenate(text_embeddings, axis=0)
-
-        return {
-            "image_embeddings": image_embeddings,
-            "text_embeddings": text_embeddings,
-            "texts": texts,
-            "label_names": label_names,
-            "labels": labels,
-            "mass": mass,
-            "calc": calc,
-            "density": density,
-            "cancer": cancer
-        }
+        if not image_embeddings:
+            raise ValueError(f"Dataset {test_dataset_name!r} has no evaluation images.")
+        collected["image_embeddings"] = np.concatenate(image_embeddings, axis=0)
+        collected["text_embeddings"] = (
+            np.concatenate(text_embeddings, axis=0) if text_embeddings else np.empty((0, 0))
+        )
+        return collected
 
     def encode_image(self, image: torch.Tensor):
         with torch.no_grad():
-            img_emb = self.model.encode_image(image.to(self.device))
-            img_emb = self.model.image_projection(img_emb) if self.model.projection else img_emb
-            img_emb = img_emb / torch.norm(img_emb, dim=1, keepdim=True)
-        return img_emb.detach().cpu().numpy()
+            image_embedding = self.model.encode_image(image.to(self.device))
+            if self.model.projection:
+                image_embedding = self.model.image_projection(image_embedding)
+            image_embedding = torch.nn.functional.normalize(image_embedding, dim=1)
+        return image_embedding.detach().cpu().numpy()
 
     def encode_text(self, text_token: Union[str, List[str], Dict, torch.Tensor]):
-        if isinstance(text_token, str) or isinstance(text_token, list):
+        if isinstance(text_token, (str, list)):
             text_token = self.datamodule.tokenizer(
-                text_token, padding="longest", truncation=True, return_tensors="pt",
-                max_length=self.ckpt_config["base"]["text_max_length"]
+                text_token,
+                padding="longest",
+                truncation=True,
+                return_tensors="pt",
+                max_length=self.ckpt_config["base"]["text_max_length"],
             )
-
         with torch.no_grad():
-            text_emb = self.model.encode_text(text_token.to(self.device))
-            text_emb = self.model.text_projection(text_emb) if self.model.projection else text_emb
-            text_emb = text_emb / torch.norm(text_emb, dim=1, keepdim=True)
-        return text_emb.detach().cpu().numpy()
+            text_embedding = self.model.encode_text(text_token.to(self.device))
+            if self.model.projection:
+                text_embedding = self.model.text_projection(text_embedding)
+            text_embedding = torch.nn.functional.normalize(text_embedding, dim=1)
+        return text_embedding.detach().cpu().numpy()
+
+    def _mean_prompt_embedding(self, prompts):
+        if not prompts:
+            raise ValueError("A zero-shot prompt class cannot be empty.")
+        return self.encode_text(list(prompts)).mean(axis=0, keepdims=True)
+
+    @staticmethod
+    def _binary_metrics(y_true, scores):
+        y_true = np.asarray(y_true, dtype=int)
+        scores = np.asarray(scores, dtype=float)
+        predictions = (scores >= 0.5).astype(int)
+        result = {
+            "n": int(len(y_true)),
+            "positives": int(y_true.sum()),
+            "accuracy": float(metrics.accuracy_score(y_true, predictions)),
+            "f1": float(metrics.f1_score(y_true, predictions, zero_division=0)),
+            "auroc": None,
+            "auprc": None,
+        }
+        if np.unique(y_true).size == 2:
+            result["auroc"] = float(metrics.roc_auc_score(y_true, scores))
+            result["auprc"] = float(metrics.average_precision_score(y_true, scores))
+        return result
 
     def eval_zeroshot(self, checkpoint, test_dataset_name, zs_prompts, save_path):
-        emb = self.get_embeddings(checkpoint, test_dataset_name)
-
-        print(f"Load model {checkpoint}")
-        ckpt = torch.load(checkpoint, map_location="cpu")
-        self.model.load_state_dict(ckpt["model"], strict=False)
-        self.model.eval()
-        image_embeddings = emb["image_embeddings"]
-
-        print("image_embeddings.shape", image_embeddings.shape)
-
-        print("evaluate zero shot clip")
+        # ``checkpoint`` remains in the signature for compatibility with the
+        # original launcher; weights are loaded once during initialization.
+        del checkpoint
+        embeddings = self.get_embeddings(test_dataset_name)
+        image_embeddings = embeddings["image_embeddings"]
+        sample_count = image_embeddings.shape[0]
+        rows = [
+            {
+                "image_path": embeddings["img_path"][i] if i < len(embeddings["img_path"]) else None,
+                "patient_id": embeddings["patient_id"][i] if i < len(embeddings["patient_id"]) else None,
+            }
+            for i in range(sample_count)
+        ]
         results = {}
-        log.info(zs_prompts)
-        for label_text in zs_prompts:
-            print(f"Evaluating {label_text}")
-            label_prompts = list(zs_prompts[label_text])
-            label_tokens = self.datamodule.tokenizer(
-                label_prompts, padding="longest", truncation=True, return_tensors="pt",
-                max_length=256
-            )
-            with torch.no_grad():
-                text_emb = self.model.encode_text(label_tokens.to(self.device))
-                text_emb = self.model.text_projection(text_emb) if self.model.projection else text_emb
-                text_emb = text_emb / torch.norm(text_emb, dim=1, keepdim=True)
-                text_emb = text_emb.detach().cpu().numpy()
 
-            similarities = softmax(metrics.pairwise.cosine_similarity(image_embeddings, text_emb), axis=1)
-            print(text_emb.shape, image_embeddings.shape, similarities.shape)
-            if label_text.lower() == "suspicious_calcification":
-                fpr, tpr, thresholds = metrics.roc_curve(emb["calc"], similarities[:, 1])
-                auroc = metrics.auc(fpr, tpr)
-                results[label_text] = auroc
-            elif label_text.lower()== "mass":
-                fpr, tpr, thresholds = metrics.roc_curve(emb["mass"], similarities[:, 1])
-                auroc = metrics.auc(fpr, tpr)
-                results[label_text] = auroc
-            elif label_text.lower() == "density":
-                predictions = np.argmax(similarities, axis=1)
-                accuracy = accuracy_score(emb["density"], predictions)
-                results[label_text] = accuracy
-            elif label_text.lower() == "cancer" or label_text.lower() == "malignancy":
-                fpr, tpr, thresholds = metrics.roc_curve(emb["cancer"], similarities[:, 1])
-                auroc = metrics.auc(fpr, tpr)
-                results[label_text] = auroc
+        for prompt_name, prompt_entry in zs_prompts.items():
+            prompt_key = prompt_name.lower()
+            if prompt_key == "density":
+                class_embeddings = np.vstack([
+                    self._mean_prompt_embedding(prompt_entry[density_class])
+                    for density_class in ("A", "B", "C", "D")
+                ])
+                probabilities = softmax(
+                    metrics.pairwise.cosine_similarity(image_embeddings, class_embeddings), axis=1
+                )
+                predictions = probabilities.argmax(axis=1)
+                y_true = np.asarray(embeddings["density"], dtype=int)
+                if len(y_true) != sample_count:
+                    raise ValueError(f"Missing density labels for {test_dataset_name}.")
+                results[prompt_name] = {
+                    "n": int(sample_count),
+                    "accuracy": float(metrics.accuracy_score(y_true, predictions)),
+                }
+                for i in range(sample_count):
+                    rows[i]["density"] = int(y_true[i])
+                    rows[i]["density_pred"] = int(predictions[i])
+                    for class_index, density_class in enumerate(("A", "B", "C", "D")):
+                        rows[i][f"density_{density_class}_score"] = float(probabilities[i, class_index])
+                continue
 
-        print(test_dataset_name)
-        print(results)
+            positive = self._mean_prompt_embedding(prompt_entry.get("positive", []))
+            negative = self._mean_prompt_embedding(prompt_entry.get("negative", []))
+            class_embeddings = np.vstack([negative, positive])
+            scores = softmax(
+                metrics.pairwise.cosine_similarity(image_embeddings, class_embeddings), axis=1
+            )[:, 1]
+            label_key = self._PROMPT_TO_LABEL.get(prompt_key, prompt_key.replace(" ", "_"))
+            y_true = np.asarray(embeddings.get(label_key, []), dtype=int)
+            if len(y_true) != sample_count:
+                raise ValueError(
+                    f"Missing labels for prompt {prompt_name!r} in dataset {test_dataset_name!r}."
+                )
+            results[prompt_name] = self._binary_metrics(y_true, scores)
+            for i in range(sample_count):
+                rows[i][prompt_key] = int(y_true[i])
+                rows[i][f"{prompt_key}_score"] = float(scores[i])
+                rows[i][f"{prompt_key}_pred"] = int(scores[i] >= 0.5)
+
+        output_path = Path(save_path)
+        output_path.mkdir(parents=True, exist_ok=True)
+        predictions_path = output_path / f"df_zs_{test_dataset_name}.csv"
+        pd.DataFrame(rows).to_csv(predictions_path, index=False)
+        log.info("Wrote zero-shot predictions to %s", predictions_path)
         return results
 
-
     def eval_img_text_retrieval(self, checkpoint, test_dataset_name, save_path):
-        emb = self.get_embeddings(checkpoint, test_dataset_name)
-        image_embeddings = emb["image_embeddings"]
-        text_embeddings = emb["text_embeddings"]
-        text_list = emb["texts"]
+        del checkpoint, save_path
+        embeddings = self.get_embeddings(test_dataset_name)
+        image_embeddings = embeddings["image_embeddings"]
+        text_embeddings = embeddings["text_embeddings"]
+        text_list = embeddings["texts"]
 
-        log.info("image_embeddings.shape", image_embeddings.shape)
-        log.info("text_embeddings.shape", text_embeddings.shape)
-        log.info(len(text_list))
+        unique_texts = []
+        unique_indexes = []
+        index_to_label = {}
+        for index, text in enumerate(text_list):
+            if text not in unique_texts:
+                unique_texts.append(text)
+                unique_indexes.append(index)
+            index_to_label[index] = unique_texts.index(text)
 
-        log.info("evaluate image text retrieval")
-
-        identical_text_set = []
-
-        idx2label = {}
-        identical_indexes = []
-        for i, text in enumerate(text_list):
-            if text not in identical_text_set:
-                identical_text_set.append(text)
-                identical_indexes.append(i)
-                idx2label[i] = len(identical_text_set) - 1
-            else:
-                idx2label[i] = identical_text_set.index(text)
-
-        identical_text_embedding = text_embeddings[identical_indexes]
-
-        num_samples = image_embeddings.shape[0]
-        n_text = len(identical_text_set)
-
-        similarities = metrics.pairwise.cosine_similarity(image_embeddings, identical_text_embedding)  # n x m
-        recall_dict = {1: 0, 5: 0, 10: 0, 15: 0}
+        unique_text_embeddings = text_embeddings[unique_indexes]
+        similarities = metrics.pairwise.cosine_similarity(image_embeddings, unique_text_embeddings)
+        recall = {1: 0, 5: 0, 10: 0, 15: 0}
         mean_rank = 0
-        for idx in range(num_samples):
-            label = idx2label[idx]
-            similarity = similarities[idx]
-            similarity_args = similarity.argsort()
-
-            # rank of the paired text
-            rank = n_text - np.argwhere(similarity_args == label).ravel()[0]
+        for index, similarity in enumerate(similarities):
+            label = index_to_label[index]
+            rank = len(unique_texts) - np.argwhere(similarity.argsort() == label).ravel()[0]
             mean_rank += rank
-
-            for k in recall_dict:
+            for k in recall:
                 if rank <= k:
-                    recall_dict[k] += 1
+                    recall[k] += 1
 
-        # results
-        log.info(
-            "\n".join([f"Recall@{k}: {v / num_samples:.3f}" for k, v in
-                       recall_dict.items()]) + f"\nmean rank: {mean_rank / num_samples:.3f}"
-        )
-        result = {}
-        result.update({f"Recall@{k}": v / num_samples for k, v in recall_dict.items()})
-        result.update({"MeanRank": mean_rank / num_samples})
-        return {
-            "retrieval_i2t": result
-        }
-
-
-def classification_score(result: dict):
-    for key, value in result.items():
-        for sub_key, sub_value in value.items():
-            if isinstance(sub_value, np.float32):
-                value[sub_key] = float(sub_value)
-    auroc = np.mean([value["AUROC"] for value in result.values()])
-    f1 = np.mean([value["F1"] for value in result.values()])
-    acc = np.mean([value["Accuracy"] for value in result.values()])
-    acc_pos = np.mean([value["ACC_POSITIVES"] for value in result.values()])
-    pF = np.mean([value["pF"] for value in result.values()])
-    prauc = np.mean([value["prauc"] for value in result.values()])
-
-    result["ACC_POSITIVES(Avg)"] = acc_pos
-    result["pF(Avg)"] = pF
-    result["prauc(Avg)"] = prauc
-    result["AUROC(Avg)"] = auroc
-    result["F1(Avg)"] = f1
-    result["Accuracy(Avg)"] = acc
-
-    s = "\n".join(f"{k}: {v}" for k, v in result.items())
-    log.info(s)
-
-    return result
-
-
-def multiclass_classification(preds: np.ndarray, labels: np.ndarray, class_list: list):
-    log.info("evaluate multi-class classification")
-    preds_args = np.argmax(preds, axis=1)
-
-    class_dict = {class_name: {"total_num": 0, "correct_num": 0} for class_name in class_list}
-    for idx, class_name in enumerate(class_list):
-        class_dict[class_name]["total_num"] = labels[:, idx].sum()
-        class_dict[class_name]["correct_num"] = (labels[:, idx] * (preds_args == idx)).sum()
-
-    total_num = len(labels)
-    correct_num = sum([v["correct_num"] for v in class_dict.values()])
-
-    result = {k: v["correct_num"] / v["total_num"] for k, v in class_dict.items()}
-    result["Accuracy(Macro)"] = np.mean(list(result.values()))
-    result["Accuracy(Micro)"] = correct_num / total_num  # same with macro due to same total_num
-    s = " / ".join([f"{c}: {v:.3f}" for c, v in result.items()])
-    log.info(s)
-
-    return result
-
-
-def pfbeta_binarized(gt, pred):
-    positives = pred[gt == 1]
-    scores = []
-    for th in positives:
-        binarized = (pred >= th).astype('int')
-        score = pfbeta(gt, binarized, 1)
-        scores.append(score)
-
-    return np.max(scores)
-
-
-def auroc(gt, pred):
-    return roc_auc_score(gt, pred)
-
-
-def pfbeta(gt, pred, beta):
-    y_true_count = 0
-    ctp = 0
-    cfp = 0
-
-    for idx in range(len(gt)):
-        prediction = min(max(pred[idx], 0), 1)
-        if (gt[idx]):
-            y_true_count += 1
-            ctp += prediction
-            # cfp += 1 - prediction
-        else:
-            cfp += prediction
-
-    beta_squared = beta * beta
-    c_precision = ctp / (ctp + cfp)
-    c_recall = ctp / y_true_count
-    if c_precision > 0 and c_recall > 0:
-        result = (1 + beta_squared) * (c_precision * c_recall) / (beta_squared * c_precision + c_recall)
-        return result
-    else:
-        return 0
-
-
-def pr_auc(gt, pred, get_all=False):
-    precision, recall, _ = precision_recall_curve(gt, pred)
-    score = auc(recall, precision)
-    if get_all:
-        return score, precision, recall
-    else:
-        return score
+        sample_count = len(image_embeddings)
+        result = {f"Recall@{k}": value / sample_count for k, value in recall.items()}
+        result["MeanRank"] = mean_rank / sample_count
+        return {"retrieval_i2t": result}

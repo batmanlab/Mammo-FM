@@ -1,14 +1,22 @@
 #!/bin/bash
 
-### USER INPUT SECTION — set your checkpoint here:
+set -euo pipefail
 
-CKPT_KEY="Mammo-FM"
-CLIP_CKPT="/restricted/projectnb/batmanlab/shawn24/PhD/Breast-CLIP/src/codebase/outputs/Mammo-FM/b5_detector_n_modernbert_2048/checkpoints/fold_0/Mammo-FM_BatmanlabTrained_CLIP.tar"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+MAMMO_FM_REPO_ROOT="${MAMMO_FM_REPO_ROOT:-$(cd -- "${SCRIPT_DIR}/../.." && pwd)}"
+MAMMO_FM_CLIP_CKPT="${MAMMO_FM_CLIP_CKPT:-/restricted/projectnb/batmanlab/shawn24/PhD/Mammo-FM-Test-check/Mammo-FM_BatmanlabTrained_CLIP.tar}"
+: "${MAMMO_FM_EVAL_DIR:?Set MAMMO_FM_EVAL_DIR to an output directory outside the repository.}"
+MAMMO_FM_CONDA_ENV="${MAMMO_FM_CONDA_ENV:-Mammo-FM}"
+export MAMMO_FM_REPO_ROOT MAMMO_FM_EVAL_DIR MAMMO_FM_CONDA_ENV
+[[ -f "${MAMMO_FM_CLIP_CKPT}" ]] || { echo "Missing Mammo-FM checkpoint: ${MAMMO_FM_CLIP_CKPT}" >&2; exit 1; }
+
+CKPT_KEY="${MAMMO_FM_CKPT_KEY:-Mammo-FM}"
+CLIP_CKPT="${MAMMO_FM_CLIP_CKPT}"
 
 ### Define global log base path
-LOG_BASE="/restricted/projectnb/batmanlab/shawn24/PhD/Breast-CLIP-downstream/src/scc_logs/breast"
+LOG_BASE="${MAMMO_FM_EVAL_DIR}/logs"
 SUB_DIR="epoch4/batmanlab_trained_weightedBCE_n"
-source "/restricted/projectnb/batmanlab/shawn24/PhD/Breast-CLIP-downstream/src/scripts/configs/nl_breast_configs.sh"
+source "${SCRIPT_DIR}/configs/nl_breast_configs.sh"
 
 NL_Breast_LABELS=("cancer")
 NL_Breast_FRACS=("1.0" "0.8" "0.5" "0.25" "0.1")
@@ -18,6 +26,12 @@ NL_Breast_ARCHS=("breast_clip_det_b5_period_n_lp" "breast_clip_det_b5_period_n_f
 
 for LABEL in "${NL_Breast_LABELS[@]}"; do
   for ARCH in "${NL_Breast_ARCHS[@]}"; do
+    gpu_capability=8.0
+    memory_per_core=8G
+    if [[ "${ARCH}" == *_lp ]]; then
+      gpu_capability=7.0
+      memory_per_core=4G
+    fi
     for FRAC in "${NL_Breast_FRACS[@]}"; do
       export CLIP_CKPT="$CLIP_CKPT"
       export ARCH="$ARCH"
@@ -47,9 +61,10 @@ for LABEL in "${NL_Breast_LABELS[@]}"; do
 
       echo "Submitting NLBreast: $jobname"
       qsub -j y -N "$jobname" \
+      -l "gpu_c=${gpu_capability},mem_per_core=${memory_per_core}" \
       -o "${logdir}/${jobname}.qlog" \
-      -v ARCH,DATASET_NAME,DATA_DIR,IMG_DIR,CSV_FILE,DATA_FRAC,CLIP_CKPT,LABEL,WEIGHTED_BCE,EXTRA_ARGS \
-      "/restricted/projectnb/batmanlab/shawn24/PhD/Breast-CLIP-downstream/src/scripts/qsub_templates/base_classifier.qsub"
+      -v ARCH,DATASET_NAME,DATA_DIR,IMG_DIR,CSV_FILE,DATA_FRAC,CLIP_CKPT,LABEL,WEIGHTED_BCE,EXTRA_ARGS,MAMMO_FM_REPO_ROOT,MAMMO_FM_EVAL_DIR,MAMMO_FM_CONDA_ENV \
+      "${SCRIPT_DIR}/qsub_templates/base_classifier.qsub"
 
     done
   done

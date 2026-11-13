@@ -1,0 +1,3 @@
+source: "ft"
+pretrained_model_name_or_path: "answerdotai/ModernBERT-base"
+cache_dir: ${oc.env:MAMMO_FM_MODERNBERT_DIR}

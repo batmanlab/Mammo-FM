@@ -13,15 +13,16 @@ import pickle
 
 def config():
     parser = argparse.ArgumentParser()
+    eval_root = os.environ.get("MAMMO_FM_EVAL_DIR")
     parser.add_argument('--tensorboard-path', metavar='DIR',
-                        default='/restricted/projectnb/batmanlab/shawn24/PhD/Multimodal-mistakes-debug/log',
-                        help='path to tensorboard logs')
+                        default=os.path.join(eval_root, "tensorboard") if eval_root else None,
+                        help='path to tensorboard logs outside the Mammo-FM repository')
     parser.add_argument('--checkpoints', metavar='DIR',
-                        default='/restricted/projectnb/batmanlab/shawn24/PhD/Multimodal-mistakes-debug/checkpoints',
-                        help='path to checkpoints')
+                        default=os.path.join(eval_root, "checkpoints") if eval_root else None,
+                        help='path to downstream checkpoints outside the Mammo-FM repository')
     parser.add_argument('--output_path', metavar='DIR',
-                        default='/restricted/projectnb/batmanlab/shawn24/PhD/Multimodal-mistakes-debug/out',
-                        help='path to output logs')
+                        default=os.path.join(eval_root, "outputs") if eval_root else None,
+                        help='path to downstream outputs outside the Mammo-FM repository')
     parser.add_argument(
         "--data-dir",
         default="/restricted/projectnb/batmanlab/shawn24/PhD/RSNA_Breast_Imaging/Dataset",
@@ -32,7 +33,7 @@ def config():
     )
     parser.add_argument("--csv-file", default="External/img_text/img_text_dicom_consolidated_folds.csv", type=str,
                         help="data csv file")
-    parser.add_argument("--clip_chk_pt_path", default=None, type=str, help="Path to Mammo-CLIP chkpt")
+    parser.add_argument("--clip_chk_pt_path", default=None, type=str, help="Path to a Mammo-FM checkpoint")
     parser.add_argument("--dataset", default="ViNDr", type=str, help="Dataset name?")
     parser.add_argument("--data_frac", default=1.0, type=float, help="Fraction of data to be used for training")
     parser.add_argument(
@@ -70,7 +71,17 @@ def config():
     parser.add_argument("--running-interactive", default='n', type=str)
     parser.add_argument("--concepts", default="Suspicious Calcification", type=str)
 
-    return parser.parse_args()
+    args = parser.parse_args()
+    missing_output_args = [
+        name for name in ("tensorboard_path", "checkpoints", "output_path")
+        if getattr(args, name) is None
+    ]
+    if missing_output_args:
+        parser.error(
+            "Set MAMMO_FM_EVAL_DIR or pass --tensorboard-path, --checkpoints, and --output_path. "
+            "Evaluation artifacts must be stored outside the Mammo-FM repository."
+        )
+    return args
 
 
 def main(args):

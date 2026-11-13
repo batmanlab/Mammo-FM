@@ -1,0 +1,23 @@
+name: "clip_custom"
+temperature: 0.07
+
+image_encoder:
+  source: "cnn"
+  name: "tf_efficientnet_b5_ns-detect"
+  pretrained: true
+  model_type: "cnn"
+
+text_encoder:
+  source: "ft"
+  name: "answerdotai/ModernBERT-base"
+  pretrained: true
+  gradient_checkpointing: false
+  pooling: "eos"
+  cache_dir: ${oc.env:MAMMO_FM_MODERNBERT_DIR}
+  trust_remote_code: true
+  mlm_head: true
+
+projection_head:
+  name: "linear"
+  dropout: 0.1
+  proj_dim: 512

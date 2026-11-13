@@ -1,7 +1,9 @@
 rsna:
   name: "rsna"
   data_type: "image_classification_zs"
-  data_dir: "${base.data_dir}/RSNA_Breast_Imaging/Dataset"
+  data_dir: ${oc.env:MAMMO_FM_RSNA_DATA_DIR,/restricted/projectnb/batmanlab/shared/Data/RSNA_Breast_Imaging/Dataset}
   img_dir: "RSNA_Cancer_Detection/train_images_png"
-  data_path: "RSNA_Cancer_Detection/rsna_concepts_breast_clip.csv"
+  data_path: "RSNA_Cancer_Detection/train_folds.csv"
+  train_folds: [1, 2, 3, 4]
+  valid_folds: [0]
   text_max_length: ${base.text_max_length}

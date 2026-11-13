@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mammofm"
+version = "0.4.1"
+description = "Research-only mammography diagnosis, five-horizon risk and grounded reports with Mammo-FM"
+readme = "docs/python-package.md"
+requires-python = ">=3.10"
+license-files = ["LICENSE.txt", "LICENSE_WEIGHTS.txt", "src/mammofm/_vendor/LICENSE*", "src/mammofm/_vendor/grg/LICENSE*", "src/mammofm/_vendor/grg/NOTICE*"]
+authors = [{name = "Batman Lab"}]
+keywords = ["mammography", "Mammo-FM", "medical-imaging", "research"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+  "torch>=2.6,<3",
+  "numpy>=1.24,<3",
+  "Pillow>=9,<13",
+  "opencv-python-headless>=4.8,<5",
+  "pydicom>=2.4,<4",
+  "huggingface-hub>=0.27,<1",
+  "transformers>=4.48,<5",
+  "safetensors>=0.4",
+]
+
+[project.optional-dependencies]
+dicom = ["pylibjpeg>=2,<3", "pylibjpeg-libjpeg>=2,<3", "pylibjpeg-openjpeg>=2,<3"]
+report = [
+  "peft>=0.14,<0.15",
+  "accelerate>=1,<2",
+  "einops>=0.8,<1",
+  "sentencepiece>=0.2,<1",
+  "transformers>=4.57.6,<4.58",
+]
+dev = ["build>=1.2", "twine>=6"]
+
+[project.scripts]
+mammofm = "mammofm.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/batmanlab/Mammo-FM"
+Documentation = "https://github.com/batmanlab/Mammo-FM/blob/main/docs/python-package.md"
+Checkpoints = "https://huggingface.co/batmanLab/Mammo-FM"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["mammofm", "mammofm.*"]
+namespaces = false
+
+[tool.setuptools.package-data]
+mammofm = ["data/*.json"]
+"mammofm._vendor" = ["LICENSE*", "NOTICE*"]
+"mammofm._vendor.grg" = ["LICENSE*", "NOTICE*"]

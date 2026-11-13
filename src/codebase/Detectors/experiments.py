@@ -38,7 +38,7 @@ def do_experiements(args, device):
         args.train_folds = args.df[args.df['split'] == "training"].reset_index(drop=True)
         args.valid_folds = args.df[args.df['split'] == "test"].reset_index(drop=True)
         print(f'train: {args.train_folds.shape}', f'valid: {args.valid_folds.shape}')
-    elif args.dataset.lower() == 'embed':
+    elif args.dataset.lower() == 'image_label':
         args.df["anon_dicom_path"] = args.df["anon_dicom_path"].str.replace(
             "/ocean/projects/asc170022p/shared/Projects/breast-imaging/RSNA_Breast_Imaging/Dataset", str(args.data_dir))
         args.train_folds = args.df[args.df['fold'] != args.cur_fold].reset_index(drop=True)

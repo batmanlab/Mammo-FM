@@ -1,0 +1,9 @@
+cmmd:
+  name: "cmmd"
+  data_type: "image_classification_zs"
+  data_dir: ${oc.env:MAMMO_FM_CMMD_DATA_DIR,/restricted/projectnb/batmanlab/shawn24/Additional_Breast_data/ChineseMammoDataset}
+  img_dir: "cmmd_png"
+  data_path: "cmmd_png/merged_final_cmmd.csv"
+  train_folds: [1, 2, 3, 4]
+  valid_folds: [0]
+  text_max_length: ${base.text_max_length}

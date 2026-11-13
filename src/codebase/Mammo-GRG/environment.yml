@@ -1,0 +1,43 @@
+name: Mammo-GRG
+channels:
+  - pytorch
+  - nvidia
+  - defaults
+dependencies:
+  - python=3.10.16
+  - pip=25.0
+  - pytorch=2.1.2
+  - torchvision=0.16.2
+  - torchaudio=2.1.2
+  - pytorch-cuda=11.8
+  - git
+  - ninja
+  - packaging=24.2
+  - psutil=7.0.0
+  # Install flash-attn==2.7.3 after activating the environment; see README.md.
+  - pip:
+      - accelerate==1.2.1
+      - albumentations==2.0.0
+      - bitsandbytes==0.45.0
+      - deepspeed==0.16.3
+      - einops==0.8.1
+      - ipykernel==6.29.5
+      - nltk==3.9.1
+      - numpy==1.26.3
+      - omegaconf==2.3.0
+      - openai==1.107.1
+      - opencv-python==4.10.0.84
+      - openpyxl==3.1.5
+      - pandas==2.2.2
+      - peft==0.14.0
+      - pillow==11.1.0
+      - requests==2.32.3
+      - safetensors==0.5.2
+      - scikit-learn==1.7.0
+      - scipy==1.15.2
+      - sentencepiece==0.2.0
+      - tensorboard==2.18.0
+      - timm==1.0.13
+      - tokenizers==0.21.1
+      - tqdm==4.67.1
+      - "transformers @ git+https://github.com/huggingface/transformers.git@15bd3e61f8d3680ca472c9314ad07584d20f7b81"

@@ -1,26 +1,26 @@
 #!/bin/bash -l
 #$ -P batmanlab
-#$ -l h_rt=48:00:00
+#$ -l h_rt=24:00:00
 #$ -l gpus=1
 #$ -l gpu_c=8.0
 #$ -pe omp 4
+#$ -l mem_per_core=8G
 
-## Old by Aya
-#export CUDA_HOME=/share/pkg.8/cuda/11.8/install
-#export CUDA_PATH=/share/pkg.8/cuda/11.8/install
-#export PATH=$CUDA_HOME/bin:$PATH
-#export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
-#export CPATH=$CUDA_HOME/include:$CPATH
-#export TOKENIZERS_PARALLELISM=false
+set -euo pipefail
 
-export OLD_LD_PATH=$LD_LIBRARY_PATH
-export LD_LIBRARY_PATH=/restricted/projectnb/batmanlab/shawn24/Mammo-CLIP_modernBert/lib/python3.9/site-packages/nvidia/cuda_runtime/lib:$LD_LIBRARY_PATH
 export TOKENIZERS_PARALLELISM=false
+export NO_ALBUMENTATIONS_UPDATE=1
+export OMP_NUM_THREADS="${NSLOTS:-4}"
+export PYTHONDONTWRITEBYTECODE=1
 
 module load miniconda
-#module load python3/3.9
+conda activate "${MAMMO_FM_CONDA_ENV:-Mammo-FM}"
 
-conda activate /restricted/projectnb/batmanlab/shawn24/Mammo-CLIP_modernBert
+nvidia-smi
+python -c 'import torch; assert torch.cuda.is_available(), "CUDA is unavailable"; assert torch.cuda.device_count() >= 1, "No allocated GPU is visible"; print(f"CUDA preflight passed: {torch.cuda.get_device_name(0)}")'
+
+: "${MAMMO_FM_REPO_ROOT:?Set MAMMO_FM_REPO_ROOT to the Mammo-FM repository root.}"
+: "${MAMMO_FM_EVAL_DIR:?Set MAMMO_FM_EVAL_DIR to an output directory outside the repository.}"
 
 echo "Running: $ARCH with checkpoint $CLIP_CKPT"
 echo $ARCH
@@ -32,7 +32,19 @@ echo $DATA_FRAC
 echo $LABEL
 echo $WEIGHTED_BCE
 
-python /restricted/projectnb/batmanlab/shawn24/PhD/Breast-CLIP-downstream/src/codebase/train_classifier.py \
+task_args=()
+if [[ "${LABEL}" == "density" ]]; then
+  task_args+=(--num-classes 4)
+  if [[ "${DATASET_NAME,,}" == "lumina" ]]; then
+    : "${LUMINA_DENSITY_METADATA:?Set the cohort-keyed LUMINA density CSV path}"
+    task_args+=(--density-metadata "${LUMINA_DENSITY_METADATA}")
+  fi
+fi
+
+python -u "${MAMMO_FM_REPO_ROOT}/src/codebase/train_classifier.py" \
+  --tensorboard-path "${MAMMO_FM_EVAL_DIR}/tensorboard" \
+  --checkpoints "${MAMMO_FM_EVAL_DIR}/checkpoints" \
+  --output_path "${MAMMO_FM_EVAL_DIR}/outputs" \
   --data-dir "$DATA_DIR" \
   --img-dir "$IMG_DIR" \
   --csv-file "$CSV_FILE" \
@@ -40,7 +52,8 @@ python /restricted/projectnb/batmanlab/shawn24/PhD/Breast-CLIP-downstream/src/co
   --dataset "$DATASET_NAME" \
   --arch "$ARCH" \
   --clip_chk_pt_path "$CLIP_CKPT" \
-  --epochs 9 \
+  --epochs "${EPOCHS:-15}" \
+  --img-size 1520 912 \
   --batch-size 8 \
   --num-workers 2 \
   --lr 5e-5 \
@@ -51,4 +64,4 @@ python /restricted/projectnb/batmanlab/shawn24/PhD/Breast-CLIP-downstream/src/co
   --running-interactive 'n' \
   --weighted-BCE "$WEIGHTED_BCE" \
   --balanced-dataloader 'n' \
-  --label "$LABEL" --n_folds 1
+  --label "$LABEL" --n_folds 1 "${task_args[@]}"

@@ -1,0 +1,21 @@
+# Versions from the known-working SCC environment.
+torch==2.2.2
+torchvision==0.17.2
+numpy==1.24.3
+pandas==2.0.3
+scipy==1.10.1
+scikit-learn==1.3.2
+lifelines==0.27.8
+tqdm==4.66.5
+Pillow==10.4.0
+pydicom==2.4.4
+opencv-python==4.10.0.84
+aiofiles
+timm==1.0.8
+transformers==4.44.0
+albumentations==1.4.14
+imgaug==0.4.0
+matplotlib==3.7.5
+einops==0.8.1
+PyYAML==6.0.1
+

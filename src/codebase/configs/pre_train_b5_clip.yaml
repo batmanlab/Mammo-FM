@@ -34,4 +34,4 @@ base:
 
 hydra:
   run:
-    dir: /restricted/projectnb/batmanlab/shawn24/PhD/Mammo-CLIP/src/codebase/outputs/Mammo-FM/b5_detector_period_${base.period}
+    dir: ${oc.env:MAMMO_FM_OUTPUT_DIR}/legacy/b5_detector_period_${base.period}

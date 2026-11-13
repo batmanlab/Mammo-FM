@@ -47,12 +47,12 @@ class ImageTextDataset(Dataset):
         self.mean = mean
         self.std = std
         self.image_encoder_type = image_encoder_type
+        self.path_layout = kwargs.get("path_layout")
+        self.label_layout = kwargs.get("label_layout")
         self.image_aug_other_image = True
         self.image_view_aug = True
         self.has_backtranslated = hasattr(self.df, "text_augment")
-        with open(
-                "/restricted/projectnb/batmanlab/shawn24/PhD/Breast-CLIP-older-commit/src/codebase/breastclip/data/datasets/prompts.json"
-        ) as f:
+        with (Path(__file__).with_name("prompts_all.json")).open() as f:
             self.prompt_json = json.load(f)
 
         log.info(f"split: {split} transform")
@@ -61,13 +61,30 @@ class ImageTextDataset(Dataset):
     def __len__(self):
         return len(self.df)
 
-    def _get_img_path(self, study_id, image_id):
-        if self.dataset.lower() == "img_text":
+    def _get_img_path(self, study_id, image_id, exam_id=None):
+        path_layout = self.path_layout
+        if path_layout is None and self.dataset.lower() == "img_text":
+            path_layout = "patient_directory"
+        elif path_layout is None and self.dataset.lower() == "vindr":
+            path_layout = "study_directory"
+        elif path_layout is None and self.dataset.lower() == "image_label":
+            path_layout = "direct"
+
+        if path_layout == "patient_directory":
             return self.root_dir / self.img_dir / f"Patient_{study_id}" / image_id
-        elif self.dataset.lower() == "vindr":
+        if path_layout == "study_directory":
             return self.root_dir / self.img_dir / f"{str(study_id)}" / image_id
-        elif self.dataset.lower() == "embed":
-            return image_id.replace(".dcm", ".png")
+        if path_layout == "direct":
+            return Path(str(image_id).replace(".dcm", ".png"))
+        if path_layout == "case_control_exam":
+            if exam_id is None:
+                raise ValueError("The case_control_exam layout requires an exam_id column.")
+            exam_id = str(exam_id)
+            cases_path = self.root_dir / self.img_dir / "cases" / "test_images_png" / exam_id / image_id
+            if cases_path.exists():
+                return cases_path
+            return self.root_dir / self.img_dir / "controls" / "test_images_png" / exam_id / image_id
+        raise ValueError(f"Unsupported image path layout: {path_layout!r}")
 
     def __getitem__(self, index):
         view_list = None
@@ -124,7 +141,8 @@ class ImageTextDataset(Dataset):
                 image_path_list = [self.df["image"][index]]
 
         study_id = str(self.df.iloc[index]['patient_id'])
-        img_path = self._get_img_path(study_id, image_path_list[0])
+        exam_id = self.df.iloc[index].get("exam_id")
+        img_path = self._get_img_path(study_id, image_path_list[0], exam_id)
         if (
                 self.image_encoder_type == "swin" or
                 self.image_encoder_type == "resnet101" or
@@ -150,7 +168,7 @@ class ImageTextDataset(Dataset):
 
         if self.image_view_aug:
             if len(image_path_list) > 1:
-                img_path = self._get_img_path(study_id, image_path_list[1])
+                img_path = self._get_img_path(study_id, image_path_list[1], exam_id)
                 if (
                         self.image_encoder_type == "swin" or
                         self.image_encoder_type == "resnet101" or
@@ -209,7 +227,8 @@ class ImageTextDataset(Dataset):
 
         # Get from image-label dataset.
         elif hasattr(self.df, "CC_FINDING"):
-            if self.dataset.lower() == "vindr":
+            if self.label_layout == "paired_views" or (
+                    self.label_layout is None and self.dataset.lower() == "vindr"):
                 # Image and view column of vindr should be in order of ["CC", "MLO"]
                 # CC_FINDING, MLO_FINDING are in order:
                 # [[+ve right findings], [+ve left findings], [-ve right findings], [-ve left findings]]
@@ -224,7 +243,8 @@ class ImageTextDataset(Dataset):
                 text2 = generate_report_from_labels(report, mlo_findings, self.prompt_json,
                                                     deterministic=(self.split != "train"))
 
-            elif self.dataset.lower() == "embed":
+            elif self.label_layout == "per_image" or (
+                    self.label_layout is None and self.dataset.lower() == "image_label"):
                 if len(view_list) >= 2:
                     text_arr = []
                     for view in view_list:

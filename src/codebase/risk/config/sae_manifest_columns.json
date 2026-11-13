@@ -1,0 +1,11 @@
+{
+  "patient_id": "patient_id",
+  "exam_id": "exam_id",
+  "image_id": ["id", "image_laterality", "image_view_type"],
+  "view": ["image_laterality", "image_view_type"],
+  "image_path": "image_path",
+  "mass_present": "mass_present",
+  "calc_present": "calc_present",
+  "arch_distortion_present": "arch_distortion_present",
+  "asymmetry_present": "asymmetry_present"
+}

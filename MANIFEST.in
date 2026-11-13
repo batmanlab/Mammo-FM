@@ -1,0 +1,17 @@
+include pyproject.toml LICENSE.txt LICENSE_WEIGHTS.txt
+include docs/python-package.md
+exclude README.md
+recursive-include src/mammofm *.py *.json LICENSE* NOTICE*
+prune src/codebase
+prune src/preprocessing
+prune src/scripts
+prune src/nltk_data
+prune src/zs_prompts
+prune Test
+prune tests
+prune doc
+prune .git
+prune .idea
+prune .codex
+prune .claude
+global-exclude *.pyc *.pyo .DS_Store .env *.pth *.pt *.tar *.zip *.dcm *.dicom *.png

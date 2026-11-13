@@ -268,7 +268,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--dataset-path", type=str,
-                        default="/restricted/projectnb/batmanlab/shawn24/PhD/Mammo-CLIP/src/codebase/data_csv")
+                        default=str(Path(__file__).resolve().parent / "data_csv"))
     parser.add_argument("--csv-path", type=str,
                         default="img_text_dicom_consolidated_final_folds_BIRADS_num_1_report.csv")
     parser.add_argument("--dataset", type=str,
@@ -304,5 +304,4 @@ if __name__ == "__main__":
     )
     convert_df_to_folds(Path(out_data_path), output_csv)
     print(args.dataset_path)
-
 

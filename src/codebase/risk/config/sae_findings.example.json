@@ -1,0 +1,11 @@
+{
+  "example_finding": {
+    "neurons": [
+      10,
+      20
+    ],
+    "threshold": 1.0,
+    "corner_margin": 0,
+    "percentile": 40
+  }
+}

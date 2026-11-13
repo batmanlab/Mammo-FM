@@ -13,15 +13,16 @@ import pickle
 
 def config():
     parser = argparse.ArgumentParser()
+    eval_root = os.environ.get("MAMMO_FM_EVAL_DIR")
     parser.add_argument('--tensorboard-path', metavar='DIR',
-                        default='/restricted/projectnb/batmanlab/shawn24/PhD/Mammo-CLIP/log',
-                        help='path to tensorboard logs')
+                        default=os.path.join(eval_root, "tensorboard") if eval_root else None,
+                        help='path to tensorboard logs outside the Mammo-FM repository')
     parser.add_argument('--checkpoints', metavar='DIR',
-                        default='/restricted/projectnb/batmanlab/shawn24/PhD/Mammo-CLIP/checkpoints',
-                        help='path to checkpoints')
+                        default=os.path.join(eval_root, "checkpoints") if eval_root else None,
+                        help='path to downstream checkpoints outside the Mammo-FM repository')
     parser.add_argument('--output_path', metavar='DIR',
-                        default='/restricted/projectnb/batmanlab/shawn24/PhD/Mammo-CLIP/out',
-                        help='path to output logs')
+                        default=os.path.join(eval_root, "outputs") if eval_root else None,
+                        help='path to downstream outputs outside the Mammo-FM repository')
     parser.add_argument(
         "--data-dir",
         default="/restricted/projectnb/batmanlab/shawn24/PhD/RSNA_Breast_Imaging/Dataset",
@@ -31,7 +32,7 @@ def config():
         "--img-dir", default="RSNA_Cancer_Detection/train_images_png", type=str, help="Path to image file"
     )
 
-    parser.add_argument("--clip_chk_pt_path", default=None, type=str, help="Path to Mammo-CLIP chkpt")
+    parser.add_argument("--clip_chk_pt_path", default=None, type=str, help="Path to a Mammo-FM checkpoint")
     parser.add_argument("--csv-file", default="RSNA_Cancer_Detection/final_rsna.csv", type=str,
                         help="data csv file")
     parser.add_argument("--dataset", default="RSNA", type=str, help="Dataset name? (RSNA or VinDr)")
@@ -57,16 +58,19 @@ def config():
     parser.add_argument("--focal-alpha", default=0.6, type=float)
     parser.add_argument("--focal-gamma", default=2.0, type=float)
     parser.add_argument("--num-classes", default=1, type=int)
+    parser.add_argument("--density-metadata", default=None,
+                        help="Density-only LUMINA CSV keyed by Cancer cohort and patient_id, with density=0..3")
     parser.add_argument("--n_folds", default=4, type=int)
     parser.add_argument("--start-fold", default=0, type=int)
     parser.add_argument("--seed", default=10, type=int)
     parser.add_argument("--batch-size", default=8, type=int)
     parser.add_argument("--num-workers", default=4, type=int)
-    parser.add_argument("--epochs", default=9, type=int)
+    parser.add_argument("--epochs", default=15, type=int)
     parser.add_argument("--lr", default=5.0e-5, type=float)
     parser.add_argument("--weight-decay", default=1e-4, type=float)
     parser.add_argument("--warmup-epochs", default=1, type=float)
-    parser.add_argument("--img-size", nargs='+', default=[1520, 912])
+    parser.add_argument("--img-size", nargs=2, type=int, default=[1520, 912],
+                        metavar=("HEIGHT", "WIDTH"), help="Required image geometry: 1520 high x 912 wide")
     parser.add_argument("--device", default="cuda", type=str)
     parser.add_argument("--apex", default="y", type=str)
     parser.add_argument("--print-freq", default=5000, type=int)
@@ -77,7 +81,23 @@ def config():
     parser.add_argument("--weighted-BCE", default='n', type=str)
     parser.add_argument("--balanced-dataloader", default='n', type=str)
 
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.img_size != [1520, 912]:
+        parser.error("All classification datasets require --img-size 1520 912 (height width)")
+    if args.label.lower() == "density":
+        args.num_classes = 4
+    elif args.num_classes != 1:
+        parser.error("Only density uses four classes; other classification tasks are binary")
+    missing_output_args = [
+        name for name in ("tensorboard_path", "checkpoints", "output_path")
+        if getattr(args, name) is None
+    ]
+    if missing_output_args:
+        parser.error(
+            "Set MAMMO_FM_EVAL_DIR or pass --tensorboard-path, --checkpoints, and --output_path. "
+            "Evaluation artifacts must be stored outside the Mammo-FM repository."
+        )
+    return args
 
 
 def main(args):
@@ -91,7 +111,9 @@ def main(args):
     args.data_frac = float(args.data_frac)
     seed_all(args.seed)
     # get paths
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device = torch.device(args.device)
+    if device.type == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError("CUDA was requested, but no GPU is available")
     # args.root = f"lr_{args.lr}_epochs_{args.epochs}_weighted_BCE_{args.weighted_BCE}_balanced_dataloader_{args.balanced_dataloader}_{args.label}_data_frac_{args.data_frac}_post_miccai"
     args.root = f"lr_{args.lr}_epochs_{args.epochs}_weighted_BCE_{args.weighted_BCE}_{args.label}_data_frac_{args.data_frac}"
     args.apex = True if args.apex == "y" else False
@@ -161,28 +183,28 @@ def main(args):
     #         "fold2": 67.95945945945945,
     #         "fold3": 67.95945945945945,
     #     }
-    # elif args.weighted_BCE == "y" and args.dataset.lower() == "embed" and args.label.lower() == "calc":
+    # elif args.weighted_BCE == "y" and args.dataset.lower() == "image_label" and args.label.lower() == "calc":
     #     args.BCE_weights = {
     #         "fold0": 21.391733762748256,
     #         "fold1": 20.844534328977392,
     #         "fold2": 20.90514333895447,
     #         "fold3": 21.021697713801863,
     #     }
-    # elif args.weighted_BCE == "y" and args.dataset.lower() == "embed" and args.label.lower() == "mass":
+    # elif args.weighted_BCE == "y" and args.dataset.lower() == "image_label" and args.label.lower() == "mass":
     #     args.BCE_weights = {
     #         "fold0": 22.859414321665522,
     #         "fold1": 23.397660141318198,
     #         "fold2": 22.9801546094381,
     #         "fold3": 22.920556449758564,
     #     }
-    # elif args.weighted_BCE == "y" and args.dataset.lower() == "embed" and args.label.lower() == "cancer":
+    # elif args.weighted_BCE == "y" and args.dataset.lower() == "image_label" and args.label.lower() == "cancer":
     #     args.BCE_weights = {
     #         "fold0": 185.73142345568488,
     #         "fold1": 192.94567219152856,
     #         "fold2": 187.0868778280543,
     #         "fold3": 197.53148854961833,
     #     }
-    # elif args.weighted_BCE == "y" and args.dataset.lower() == "embed" and args.label.lower() == "arch_distortion":
+    # elif args.weighted_BCE == "y" and args.dataset.lower() == "image_label" and args.label.lower() == "arch_distortion":
     #     args.BCE_weights = {
     #         "fold0": 155.70848985725019,
     #         "fold1": 155.94858420268255,

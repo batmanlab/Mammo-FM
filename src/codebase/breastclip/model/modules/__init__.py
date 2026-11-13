@@ -92,15 +92,12 @@ def load_text_encoder(config_text_encoder: Dict, vocab_size: int):
         print(f"Loading from checkpoint: {config_text_encoder['cache_dir']}")
         
         try:
-            # Set device map and device before loading
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-            # Load directly from the checkpoint with device specified
             _text_encoder = AutoModel.from_pretrained(
                 config_text_encoder["cache_dir"],
-                trust_remote_code=True,
+                trust_remote_code=config_text_encoder.get("trust_remote_code", True),
                 torch_dtype=torch.float32,
-                device_map="cuda",
-                low_cpu_mem_usage=True
+                low_cpu_mem_usage=True,
+                local_files_only=True,
             )
             # Add out_dim attribute - ModernBERT uses hidden_size as embedding dimension
             _text_encoder.out_dim = _text_encoder.config.hidden_size
